@@ -1,7 +1,7 @@
 -ifndef(__REC_TO_MSGPACK_HRL__).
 -define(__REC_TO_MSGPACK_HRL__, true).
 
--compile([{parse_transform, rec_to_msgpack}]).
+-compile([{parse_transform, rec_to_msgpack}, export_all]).
 
 %% Msgpack type rules:
 %% erlang               msgpack
@@ -19,7 +19,6 @@
 -type mp_nil()              :: nil.
 -type mp_bool()             :: boolean().
 -type mp_str()              :: binary().
--type mp_array()            :: list().
 -type mp_array(ElemType)    :: list(ElemType).
 -type mp_map()              :: {[tuple()]}.
 

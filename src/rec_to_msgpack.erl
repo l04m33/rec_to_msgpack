@@ -10,12 +10,11 @@ parse_transform(Forms, _Options) ->
     PackerForms = gen_packer_forms(RecMeta),
     UnpackerForms = gen_unpacker_forms(RecMeta),
 
-    [{eof, _} = EOF,
-     {attribute, _, file, _} = FileAttr
+    [{eof, _} = EOF
      | RestForms] = lists:reverse(Forms),
 
     lists:reverse(RestForms) ++ PackerForms
-        ++ UnpackerForms ++ [FileAttr, EOF].
+        ++ UnpackerForms ++ [EOF].
 
 
 parse_records(Forms) ->
@@ -57,10 +56,38 @@ parse_type({type, _Line0, MPType, MPTypeArgs}) ->
     end.
 
 
-gen_packer_forms(_) ->
-    [].     %% TODO
+gen_packer_forms(RecMeta) ->
+    InitForm = {attribute, ?LINE, file, {?FILE, ?LINE}},
+    FunForm = gen_packer_fun_forms(RecMeta, []),
+    [InitForm, FunForm].
+
+gen_packer_fun_forms([{RecName, _FieldsSpec} | RestRecMeta], Acc) ->
+    ClauseBody = [{atom, ?LINE, 'TODO'}],
+    FunClause = {clause, ?LINE,
+                 [{var, ?LINE, 'Rec'}],
+                 [[{call, ?LINE,
+                    {atom, ?LINE, is_record},
+                    [{var, ?LINE, 'Rec'}, {atom, ?LINE, RecName}]}]],
+                 ClauseBody},
+    gen_packer_fun_forms(RestRecMeta, [FunClause | Acc]);
+gen_packer_fun_forms([], Acc) ->
+    {function, ?LINE, pack, 1, Acc}.
 
 
-gen_unpacker_forms(_) ->
-    [].     %% TODO
+gen_unpacker_forms(RecMeta) ->
+    InitForm = {attribute, ?LINE, file, {?FILE, ?LINE}},
+    FunForm = gen_unpacker_fun_forms(RecMeta, []),
+    [InitForm, FunForm].
+
+gen_unpacker_fun_forms([{RecName, _FieldsSpec} | RestRecMeta], Acc) ->
+    ClauseBody = [{atom, ?LINE, 'TODO'}],
+    FunClause = {clause, ?LINE,
+                 [{var, ?LINE, 'Rec'}],
+                 [[{call, ?LINE,
+                    {atom, ?LINE, is_record},
+                    [{var, ?LINE, 'Rec'}, {atom, ?LINE, RecName}]}]],
+                 ClauseBody},
+    gen_unpacker_fun_forms(RestRecMeta, [FunClause | Acc]);
+gen_unpacker_fun_forms([], Acc) ->
+    {function, ?LINE, unpack, 1, Acc}.
 
