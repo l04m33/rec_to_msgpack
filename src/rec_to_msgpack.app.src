@@ -1,0 +1,14 @@
+{application, rec_to_msgpack,
+ [
+  {description,
+      "Parse transform to convert"
+      " record definitions into"
+      " Msgpack packers and unpackers"},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {env, []}
+ ]}.
