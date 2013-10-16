@@ -28,9 +28,7 @@ bin_list_to_rec_list([], _RecName, _UnpackFun, AccList) ->
 
 
 parse_transform(Forms, _Options) ->
-    io:format("~p~n", [Forms]),
     RecMeta = parse_records(Forms),
-    io:format("~p~n", [RecMeta]),
     PackerForms = gen_packer_forms(RecMeta),
     UnpackerForms = gen_unpacker_forms(RecMeta),
 
@@ -173,7 +171,6 @@ gen_unpacker_forms(RecMeta) ->
 
 gen_unpacker_fun_forms([{RecName, FieldsSpec} | RestRecMeta], Acc) ->
     ClauseBody = gen_unpacker_clause(FieldsSpec, FieldsSpec, RecName, []),
-    io:format("~p~n", [ClauseBody]),
     FunClause = {clause, ?LINE,
                  [{atom, ?LINE, RecName}, {var, ?LINE, '_Bin1'}],
                  [],
