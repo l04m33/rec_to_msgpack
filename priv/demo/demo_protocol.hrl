@@ -8,7 +8,8 @@
 
 -record(pt_time_i, {}).
 -record(pt_time_o, {
-        times = []      :: mp_array(mp_int())
+        times = []  :: mp_array(#pt_time_entry{}),
+        flag  = 0   :: mp_int()
        }).
 
 -endif.
