@@ -12,12 +12,12 @@ It's a small helper to specify binary network protocols on top of
 
 2. Declare your protocols with typed records, like this:
 
-```erlang
--record(pt_some_protocol, {
-        some_int_field  = 0  :: mp_int(),
-        some_list       = [] :: mp_array(mp_int())
-       }).
-```
+   ```erlang
+   -record(pt_some_protocol, {
+           some_int_field  = 0  :: mp_int(),
+           some_list       = [] :: mp_array(mp_int())
+          }).
+   ```
 
    For available field types, see **include/rec_to_msgpack.hrl**.
 
@@ -30,21 +30,21 @@ It's a small helper to specify binary network protocols on top of
 4. You'll get your module with a **pack/1** function and another
    **unpack/2** function. **pack/1** complies with the following spec:
 
-```erlang
--spec pack(Rec) -> Packet when
-        Rec :: tuple(),         % Records you declared, in fact.
-        Packet :: binary().     % The output packet data.
-```
+   ```erlang
+   -spec pack(Rec) -> Packet when
+           Rec :: tuple(),         % Records you declared, in fact.
+           Packet :: binary().     % The output packet data.
+   ```
 
    And **unpack/2** complies with the following:
 
-```erlang
--spec unpack(RecName, Packet) -> {Rec, RestPacket} when
-        RecName :: atom(),      % Name of your record.
-        Packet :: binary(),     % Input packet data.
-        Rec :: tuple(),         % Records you declared.
-        RestPacket :: binary(). % The remaining packet data.
-```
+   ```erlang
+   -spec unpack(RecName, Packet) -> {Rec, RestPacket} when
+           RecName :: atom(),      % Name of your record.
+           Packet :: binary(),     % Input packet data.
+           Rec :: tuple(),         % Records you declared.
+           RestPacket :: binary(). % The remaining packet data.
+   ```
 
 5. Fit the pack/unpack functions in your networking/serialization code.
 
