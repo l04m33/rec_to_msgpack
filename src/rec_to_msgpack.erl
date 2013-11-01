@@ -3,6 +3,7 @@
 -export([rec_list_to_bin_list/2]).
 -export([bin_list_to_rec_list/3]).
 -export([parse_transform/2]).
+-export([parse_records_2/3]).
 
 
 rec_list_to_bin_list(List, PackFun) ->
@@ -51,6 +52,31 @@ parse_records([_ | RestForms], Acc) ->
     parse_records(RestForms, Acc);
 parse_records([], Acc) ->
     Acc.
+
+
+parse_records_2([T | Trees], Acc, NewSubTrees) ->
+    {NT, NAcc} = parse_records_2(T, Acc, []),
+    parse_records_2(Trees, NAcc, [NT | NewSubTrees]);
+parse_records_2([], Acc, NewSubTrees) ->
+    {lists:reverse(NewSubTrees), Acc};
+parse_records_2(Tree, Acc, []) ->
+    case erl_syntax:type(Tree) =:= attribute andalso 
+            erl_syntax:atom_name(erl_syntax:attribute_name(Tree)) =:= "type" of
+        true ->
+            %% TODO: Check if this type attribute is a record declaration,
+            %%       and extract the name and fields
+            io:format("~p~n", [Tree]),
+            {Tree, [Tree | Acc]};
+        false ->
+            case erl_syntax:subtrees(Tree) of
+                [] ->
+                    {Tree, Acc};
+                SubTrees ->
+                    {NewSubTrees, NewAcc} = parse_records_2(SubTrees, Acc, []),
+                    NewTree = erl_syntax:update_tree(Tree, NewSubTrees),
+                    {NewTree, NewAcc}
+            end
+    end.
 
 
 parse_record_fields([{typed_record_field,
