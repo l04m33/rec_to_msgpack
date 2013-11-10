@@ -3,7 +3,6 @@
 -export([rec_list_to_bin_list/2]).
 -export([bin_list_to_rec_list/3]).
 -export([parse_transform/2]).
--export([parse_records_2/3]).
 
 
 rec_list_to_bin_list(List, PackFun) ->
@@ -29,6 +28,7 @@ bin_list_to_rec_list([], _RecName, _UnpackFun, AccList) ->
 
 
 parse_transform(Forms, _Options) ->
+    io:format("~p", [Forms]),
     RecMeta = parse_records(Forms),
     PackerForms = gen_packer_forms(RecMeta),
     UnpackerForms = gen_unpacker_forms(RecMeta),
@@ -52,31 +52,6 @@ parse_records([_ | RestForms], Acc) ->
     parse_records(RestForms, Acc);
 parse_records([], Acc) ->
     Acc.
-
-
-parse_records_2([T | Trees], Acc, NewSubTrees) ->
-    {NT, NAcc} = parse_records_2(T, Acc, []),
-    parse_records_2(Trees, NAcc, [NT | NewSubTrees]);
-parse_records_2([], Acc, NewSubTrees) ->
-    {lists:reverse(NewSubTrees), Acc};
-parse_records_2(Tree, Acc, []) ->
-    case erl_syntax:type(Tree) =:= attribute andalso 
-            erl_syntax:atom_name(erl_syntax:attribute_name(Tree)) =:= "type" of
-        true ->
-            %% TODO: Check if this type attribute is a record declaration,
-            %%       and extract the name and fields
-            io:format("~p~n", [Tree]),
-            {Tree, [Tree | Acc]};
-        false ->
-            case erl_syntax:subtrees(Tree) of
-                [] ->
-                    {Tree, Acc};
-                SubTrees ->
-                    {NewSubTrees, NewAcc} = parse_records_2(SubTrees, Acc, []),
-                    NewTree = erl_syntax:update_tree(Tree, NewSubTrees),
-                    {NewTree, NewAcc}
-            end
-    end.
 
 
 parse_record_fields([{typed_record_field,
@@ -116,15 +91,13 @@ gen_packer_forms(RecMeta) ->
 
 gen_packer_fun_forms([{RecName, FieldsSpec} | RestRecMeta], Acc) ->
     ClauseBody = gen_packer_clause(FieldsSpec, RecName, []),
-    FunClause = {clause, ?LINE,
-                 [{var, ?LINE, 'Rec'}],
-                 [[{call, ?LINE,
-                    {atom, ?LINE, is_record},
-                    [{var, ?LINE, 'Rec'}, {atom, ?LINE, RecName}]}]],
-                 ClauseBody},
+    FunClause = clause([var('Rec', ?LINE)],
+                       [[call(atom(is_record, ?LINE),
+                              [var('Rec', ?LINE), atom(RecName, ?LINE)], ?LINE)]],
+                       ClauseBody, ?LINE),
     gen_packer_fun_forms(RestRecMeta, [FunClause | Acc]);
 gen_packer_fun_forms([], Acc) ->
-    {function, ?LINE, pack, 1, Acc}.
+    function(pack, 1, Acc, ?LINE).
 
 
 gen_packer_clause([{FieldName, _Idx, MPType} | RestFields], RecName, Acc) ->
@@ -143,26 +116,15 @@ gen_packer_clause([{FieldName, _Idx, MPType} | RestFields], RecName, Acc) ->
             simple_bin_element(RecName, FieldName, ?LINE);
         {record, _SubRecName} ->
             {bin_element, ?LINE,
-             {call, ?LINE, 
-              {atom, ?LINE, pack},
-              [{record_field, ?LINE,
-                {var, ?LINE, 'Rec'},
-                RecName,
-                {atom, ?LINE, FieldName}}]},
+             call(atom(pack, ?LINE),
+                  [var_rec_field('Rec', RecName, FieldName, ?LINE)], ?LINE),
              default, [binary]};
         {mp_array, {record, _ElemRecName}} ->
             {bin_element, ?LINE,
-             {call, ?LINE,
-              {remote, ?LINE, {atom, ?LINE, msgpack}, {atom, ?LINE, pack}},
-              [{call, ?LINE,
-                {remote, ?LINE,
-                 {atom, ?LINE, rec_to_msgpack},
-                 {atom, ?LINE, rec_list_to_bin_list}},
-                [{record_field, ?LINE,
-                  {var,?LINE,'Rec'},
-                  RecName,
-                  {atom, ?LINE, FieldName}},
-                 {'fun', ?LINE, {function, pack, 1}}]}]},
+             call(remote(msgpack, pack, ?LINE),
+                  [call(remote(rec_to_msgpack, rec_list_to_bin_list, ?LINE),
+                        [var_rec_field('Rec', RecName, FieldName, ?LINE),
+                         {'fun', ?LINE, {function, pack, 1}}], ?LINE)], ?LINE),
              default, [binary]};
         {mp_array, _} ->
             simple_bin_element(RecName, FieldName, ?LINE)
@@ -174,16 +136,12 @@ gen_packer_clause([], _RecName, Acc) ->
 
 simple_bin_element(RecName, FieldName, Line) ->
     {bin_element, Line,
-        call_msgpack_pack({record_field, ?LINE,
-                           {var, ?LINE, 'Rec'},
-                           RecName,
-                           {atom, ?LINE, FieldName}}, ?LINE),
+        call_msgpack_pack(var_rec_field('Rec', RecName, FieldName, ?LINE), ?LINE),
         default, [binary]}.
 
 
 call_msgpack_pack(Arg, Line) ->
-    {call, Line,
-     {remote, Line, {atom, Line, msgpack}, {atom, Line, pack}}, [Arg]}.
+    call(remote(msgpack, pack, Line), [Arg], Line).
 
 
 %% =================== unpacker stuff ====================
@@ -196,13 +154,10 @@ gen_unpacker_forms(RecMeta) ->
 
 gen_unpacker_fun_forms([{RecName, FieldsSpec} | RestRecMeta], Acc) ->
     ClauseBody = gen_unpacker_clause(FieldsSpec, FieldsSpec, RecName, []),
-    FunClause = {clause, ?LINE,
-                 [{atom, ?LINE, RecName}, {var, ?LINE, '_Bin1'}],
-                 [],
-                 ClauseBody},
+    FunClause = clause([atom(RecName, ?LINE), var('_Bin1', ?LINE)], [], ClauseBody, ?LINE),
     gen_unpacker_fun_forms(RestRecMeta, [FunClause | Acc]);
 gen_unpacker_fun_forms([], Acc) ->
-    {function, ?LINE, unpack, 2, Acc}.
+    function(unpack, 2, Acc, ?LINE).
 
 
 gen_unpacker_clause([{FieldName, Idx, MPType} | RestFields],
@@ -225,10 +180,10 @@ gen_unpacker_clause([{FieldName, Idx, MPType} | RestFields],
              {tuple, ?LINE,
               [{var, ?LINE, FieldName},
                {var, ?LINE, list_to_atom("_Bin" ++ integer_to_list(Idx))}]},
-             {call, ?LINE,
-              {atom, ?LINE, unpack},
-              [{atom, ?LINE, SubRecName},
-               {var, ?LINE, list_to_atom("_Bin" ++ integer_to_list(Idx - 1))}]}};
+             call(atom(unpack, ?LINE), 
+                  [atom(SubRecName, ?LINE),
+                   var(list_to_atom("_Bin" ++ integer_to_list(Idx - 1)), ?LINE)],
+                  ?LINE)};
         {mp_array, {record, ElemRecName}} ->
             ArrVarName = list_to_atom(atom_to_list(FieldName) ++ "_arr"),
             {block, ?LINE, [
@@ -239,19 +194,16 @@ gen_unpacker_clause([{FieldName, Idx, MPType} | RestFields],
                  call_msgpack_unpack_stream({var, ?LINE, list_to_atom("_Bin" ++ integer_to_list(Idx - 1))}, ?LINE)},
                 {match, ?LINE,
                  {var, ?LINE, FieldName},
-                 {call, ?LINE,
-                  {remote, ?LINE,
-                   {atom, ?LINE, rec_to_msgpack},
-                   {atom, ?LINE, bin_list_to_rec_list}},
-                  [{var, ?LINE, ArrVarName}, {atom, ?LINE, ElemRecName},
-                   {'fun', ?LINE, {function, unpack, 2}}]}}]};
+                 call(remote(rec_to_msgpack, bin_list_to_rec_list, ?LINE),
+                      [var(ArrVarName, ?LINE), atom(ElemRecName, ?LINE),
+                       {'fun', ?LINE, {function, unpack, 2}}], ?LINE)}]};
         {mp_array, _} ->
             match_simple_unpacked(FieldName, Idx, ?LINE)
     end,
     gen_unpacker_clause(RestFields, AllFields, RecName, [NewEntry | Acc]);
 gen_unpacker_clause([], AllFields, RecName, Acc) ->
     VarIdx = length(AllFields) + 1,
-    VarName = {var, ?LINE, list_to_atom("_Bin" ++ integer_to_list(VarIdx))},
+    VarName = var(list_to_atom("_Bin" ++ integer_to_list(VarIdx)), ?LINE),
     RecordDef = gen_record_def(RecName, AllFields),
     lists:reverse([{tuple, ?LINE, [RecordDef, VarName]} | Acc]).
 
@@ -262,8 +214,8 @@ gen_record_def(RecName, AllFields) ->
 
 gen_record_def(RecName, [{FieldName, _Idx, _MPType} | Rest], Acc) ->
     NewEntry = {record_field, ?LINE,
-                {atom, ?LINE, FieldName},
-                {var, ?LINE, FieldName}},
+                atom(FieldName, ?LINE),
+                var(FieldName, ?LINE)},
     gen_record_def(RecName, Rest, [NewEntry | Acc]);
 gen_record_def(RecName, [], Acc) ->
     {record, ?LINE, RecName, lists:reverse(Acc)}.
@@ -272,13 +224,33 @@ gen_record_def(RecName, [], Acc) ->
 match_simple_unpacked(FieldName, VarIdx, Line) ->
     {match, Line,
      {tuple, ?LINE,
-      [{var, ?LINE, FieldName},
-       {var, ?LINE, list_to_atom("_Bin" ++ integer_to_list(VarIdx))}]},
+      [var(FieldName, ?LINE),
+       var(list_to_atom("_Bin" ++ integer_to_list(VarIdx)), ?LINE)]},
      call_msgpack_unpack_stream(
             {var, ?LINE, list_to_atom("_Bin" ++ integer_to_list(VarIdx - 1))}, ?LINE)}.
 
 
 call_msgpack_unpack_stream(Arg, Line) ->
-    {call, Line,
-     {remote, Line, {atom, Line, msgpack}, {atom, Line, unpack_stream}}, [Arg]}.
+    call(remote(msgpack, unpack_stream, Line), [Arg], Line).
+
+call(FunName, Args, Line) ->
+    {call, Line, FunName, Args}.
+
+remote(Mod, Fun, Line) ->
+    {remote, Line, {atom, Line, Mod}, {atom, Line, Fun}}.
+
+atom(Name, Line) ->
+    {atom, Line, Name}.
+
+var(Name, Line) ->
+    {var, Line, Name}.
+
+clause(VarList, Guards, Body, Line) ->
+    {clause, Line, VarList, Guards, Body}.
+
+function(Name, Arity, Clauses, Line) ->
+    {function, Line, Name, Arity, Clauses}.
+
+var_rec_field(VarName, RecName, FieldName, Line) ->
+    {record_field, Line, {var, Line, VarName}, RecName, {atom, Line, FieldName}}.
 
