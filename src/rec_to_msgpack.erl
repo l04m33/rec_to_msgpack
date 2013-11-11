@@ -84,7 +84,7 @@ parse_type({type, _Line0, MPType, MPTypeArgs}) ->
 %% =================== packer stuff ====================
 
 gen_packer_forms(RecMeta) ->
-    InitForm = {attribute, ?LINE, file, {?FILE, ?LINE}},
+    InitForm = file_attribute(?FILE, ?LINE),
     FunForm = gen_packer_fun_forms(RecMeta, []),
     [InitForm, FunForm].
 
@@ -147,7 +147,7 @@ call_msgpack_pack(Arg, Line) ->
 %% =================== unpacker stuff ====================
 
 gen_unpacker_forms(RecMeta) ->
-    InitForm = {attribute, ?LINE, file, {?FILE, ?LINE}},
+    InitForm = file_attribute(?FILE, ?LINE),
     FunForm = gen_unpacker_fun_forms(RecMeta, []),
     [InitForm, FunForm].
 
@@ -176,27 +176,23 @@ gen_unpacker_clause([{FieldName, Idx, MPType} | RestFields],
         mp_map ->
             match_simple_unpacked(FieldName, Idx, ?LINE);
         {record, SubRecName} ->
-            {match, ?LINE,
-             {tuple, ?LINE,
-              [{var, ?LINE, FieldName},
-               {var, ?LINE, list_to_atom("_Bin" ++ integer_to_list(Idx))}]},
-             call(atom(unpack, ?LINE), 
-                  [atom(SubRecName, ?LINE),
-                   var(list_to_atom("_Bin" ++ integer_to_list(Idx - 1)), ?LINE)],
-                  ?LINE)};
+            match(
+                tuple([var(FieldName, ?LINE), var(list_to_atom("_Bin" ++ integer_to_list(Idx)), ?LINE)], ?LINE),
+                call(atom(unpack, ?LINE), [atom(SubRecName, ?LINE), var(list_to_atom("_Bin" ++ integer_to_list(Idx - 1)), ?LINE)], ?LINE),
+                ?LINE);
         {mp_array, {record, ElemRecName}} ->
             ArrVarName = list_to_atom(atom_to_list(FieldName) ++ "_arr"),
             {block, ?LINE, [
-                {match, ?LINE,
-                 {tuple, ?LINE,
-                  [{var, ?LINE, ArrVarName},
-                   {var, ?LINE, list_to_atom("_Bin" ++ integer_to_list(Idx))}]},
-                 call_msgpack_unpack_stream({var, ?LINE, list_to_atom("_Bin" ++ integer_to_list(Idx - 1))}, ?LINE)},
-                {match, ?LINE,
-                 {var, ?LINE, FieldName},
-                 call(remote(rec_to_msgpack, bin_list_to_rec_list, ?LINE),
-                      [var(ArrVarName, ?LINE), atom(ElemRecName, ?LINE),
-                       {'fun', ?LINE, {function, unpack, 2}}], ?LINE)}]};
+                match(
+                    tuple([var(ArrVarName, ?LINE), var(list_to_atom("_Bin" ++ integer_to_list(Idx)), ?LINE)], ?LINE),
+                    call_msgpack_unpack_stream({var, ?LINE, list_to_atom("_Bin" ++ integer_to_list(Idx - 1))}, ?LINE),
+                    ?LINE),
+                match(
+                    var(FieldName, ?LINE),
+                    call(remote(rec_to_msgpack, bin_list_to_rec_list, ?LINE),
+                         [var(ArrVarName, ?LINE), atom(ElemRecName, ?LINE),
+                          {'fun', ?LINE, {function, unpack, 2}}], ?LINE),
+                    ?LINE)]};
         {mp_array, _} ->
             match_simple_unpacked(FieldName, Idx, ?LINE)
     end,
@@ -205,7 +201,7 @@ gen_unpacker_clause([], AllFields, RecName, Acc) ->
     VarIdx = length(AllFields) + 1,
     VarName = var(list_to_atom("_Bin" ++ integer_to_list(VarIdx)), ?LINE),
     RecordDef = gen_record_def(RecName, AllFields),
-    lists:reverse([{tuple, ?LINE, [RecordDef, VarName]} | Acc]).
+    lists:reverse([tuple([RecordDef, VarName], ?LINE) | Acc]).
 
 
 gen_record_def(RecName, AllFields) ->
@@ -222,12 +218,10 @@ gen_record_def(RecName, [], Acc) ->
 
 
 match_simple_unpacked(FieldName, VarIdx, Line) ->
-    {match, Line,
-     {tuple, ?LINE,
-      [var(FieldName, ?LINE),
-       var(list_to_atom("_Bin" ++ integer_to_list(VarIdx)), ?LINE)]},
-     call_msgpack_unpack_stream(
-            {var, ?LINE, list_to_atom("_Bin" ++ integer_to_list(VarIdx - 1))}, ?LINE)}.
+    match(
+        tuple([var(FieldName, Line), var(list_to_atom("_Bin" ++ integer_to_list(VarIdx)), Line)], ?LINE),
+        call_msgpack_unpack_stream({var, Line, list_to_atom("_Bin" ++ integer_to_list(VarIdx - 1))}, Line),
+        Line).
 
 
 call_msgpack_unpack_stream(Arg, Line) ->
@@ -253,4 +247,13 @@ function(Name, Arity, Clauses, Line) ->
 
 var_rec_field(VarName, RecName, FieldName, Line) ->
     {record_field, Line, {var, Line, VarName}, RecName, {atom, Line, FieldName}}.
+
+match(Left, Right, Line) ->
+    {match, Line, Left, Right}.
+
+file_attribute(FileName, Line) ->
+    {attribute, Line, file, {FileName, Line}}.
+
+tuple(Elems, Line) ->
+    {tuple, Line, Elems}.
 
