@@ -5,6 +5,9 @@
 -export([parse_transform/2]).
 
 
+-define(REC_VAR_NAME, 'Rec').
+
+
 rec_list_to_bin_list(List, PackFun) ->
     rec_list_to_bin_list(List, PackFun, []).
 
@@ -90,9 +93,9 @@ gen_packer_forms(RecMeta) ->
 
 gen_packer_fun_forms([{RecName, FieldsSpec} | RestRecMeta], Acc) ->
     ClauseBody = gen_packer_clause(FieldsSpec, RecName, []),
-    FunClause = clause([var('Rec', ?LINE)],
+    FunClause = clause([var(?REC_VAR_NAME, ?LINE)],
                        [[call(atom(is_record, ?LINE),
-                              [var('Rec', ?LINE), atom(RecName, ?LINE)], ?LINE)]],
+                              [var(?REC_VAR_NAME, ?LINE), atom(RecName, ?LINE)], ?LINE)]],
                        ClauseBody, ?LINE),
     gen_packer_fun_forms(RestRecMeta, [FunClause | Acc]);
 gen_packer_fun_forms([], Acc) ->
@@ -116,13 +119,13 @@ gen_packer_clause([{FieldName, _Idx, MPType} | RestFields], RecName, Acc) ->
         {record, _SubRecName} ->
             {bin_element, ?LINE,
              call(atom(pack, ?LINE),
-                  [var_rec_field('Rec', RecName, FieldName, ?LINE)], ?LINE),
+                  [var_rec_field(?REC_VAR_NAME, RecName, FieldName, ?LINE)], ?LINE),
              default, [binary]};
         {mp_array, {record, _ElemRecName}} ->
             {bin_element, ?LINE,
              call(remote(msgpack, pack, ?LINE),
-                  [call(remote(rec_to_msgpack, rec_list_to_bin_list, ?LINE),
-                        [var_rec_field('Rec', RecName, FieldName, ?LINE),
+                  [call(remote(?MODULE, rec_list_to_bin_list, ?LINE),
+                        [var_rec_field(?REC_VAR_NAME, RecName, FieldName, ?LINE),
                          {'fun', ?LINE, {function, pack, 1}}], ?LINE)], ?LINE),
              default, [binary]};
         {mp_array, _} ->
@@ -135,7 +138,7 @@ gen_packer_clause([], _RecName, Acc) ->
 
 simple_bin_element(RecName, FieldName, Line) ->
     {bin_element, Line,
-        call_msgpack_pack(var_rec_field('Rec', RecName, FieldName, ?LINE), ?LINE),
+        call_msgpack_pack(var_rec_field(?REC_VAR_NAME, RecName, FieldName, ?LINE), ?LINE),
         default, [binary]}.
 
 
@@ -188,7 +191,7 @@ gen_unpacker_clause([{FieldName, Idx, MPType} | RestFields],
                     ?LINE),
                 match(
                     var(FieldName, ?LINE),
-                    call(remote(rec_to_msgpack, bin_list_to_rec_list, ?LINE),
+                    call(remote(?MODULE, bin_list_to_rec_list, ?LINE),
                          [var(ArrVarName, ?LINE), atom(ElemRecName, ?LINE),
                           {'fun', ?LINE, {function, unpack, 2}}], ?LINE),
                     ?LINE)]};
