@@ -28,7 +28,6 @@ bin_list_to_rec_list([], _RecName, _UnpackFun, AccList) ->
 
 
 parse_transform(Forms, _Options) ->
-    io:format("~p", [Forms]),
     RecMeta = parse_records(Forms),
     PackerForms = gen_packer_forms(RecMeta),
     UnpackerForms = gen_unpacker_forms(RecMeta),
