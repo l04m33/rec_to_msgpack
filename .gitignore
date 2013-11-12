@@ -3,3 +3,4 @@ ebin
 *.swp
 *.beam
 *.app
+.eunit
